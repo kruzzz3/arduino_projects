@@ -1,27 +1,21 @@
 #include <GFSK_DC.h>
-#include <GFSK_Servo.h>
-#include <GFSK_Ultrasonic.h>
-
 GFSK_DC motorRight(6, 7, 3);
 GFSK_DC motorLeft(12, 8, 5);
-GFSK_Servo servo(10);
-GFSK_Ultrasonic ultrasonic(12, 11, 50);
 
+byte msg;
+byte criticalDistanceLeft = B00000000;
+byte criticalDistanceMiddle = B00000000;
+byte criticalDistanceRight = B00000000;
+int lastState = 0;
 int currentState = 0;
-int measuredDistancesLeft[50];
-int measuredDistancesMiddle[20];
-int measuredDistancesRight[50];
 
 int speedLeft = 73;
 int speedRight = 55;
+long _lastTimer;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   
-  servo.init();
-  servo.writeInstant(-60);
-  
-  ultrasonic.init();
   motorRight.init();
   motorLeft.init();
 
@@ -30,166 +24,106 @@ void setup() {
   motorRight.stop();
   motorLeft.stop();
 
-  pinMode(2, OUTPUT);
-  pinMode(13, OUTPUT);
-
-  digitalWrite(2, LOW);
-  digitalWrite(13, LOW);
+  _lastTimer = 0;
   
   delay(1000);
 }
 
 void loop()
-{ 
-  motorRight.loop();
-  motorLeft.loop();
-  servo.loop();
-  runServo();
-  
+{   
   setNextState();
 
   Serial.println(currentState);
 
-  if (currentState == 0) { // drive foreward     
+  if (currentState == 0) { // drive forward     
     motorRight.setDirection(1);
     motorLeft.setDirection(1);
-    signalMiddle();
     motorRight.setSpeed(speedRight);
     motorLeft.setSpeed(speedLeft);
-  } else if (currentState == 1) // stop
-  {
-    motorRight.stop();
-    motorLeft.stop();
-    int lowestRight = lowest(0);
-    int lowestLeft = lowest(2);
+  } 
+  else if (currentState == 1) // stop
+  { 
+    motorRight.setSpeed(speedRight);
+    motorLeft.setSpeed(speedLeft);
+    if (_lastTimer == 0 && motorLeft.getDirection() == motorRight.getDirection())
+    {
+       _lastTimer = millis();
+       motorRight.setSpeed(speedRight/2);
+       motorLeft.setSpeed(speedLeft/2);
+    }
 
-    if (lowestRight >= lowestLeft) {
-      motorRight.setDirection(0);
-      motorLeft.setDirection(1);
-      motorRight.setSpeed(speedRight + 5);
-      motorLeft.setSpeed(speedLeft - 5);
-    } else {
-      motorRight.setDirection(1);
-      motorLeft.setDirection(0);
-      motorRight.setSpeed(speedRight - 5);
-      motorLeft.setSpeed(speedLeft + 5);
+    if (millis() > _lastTimer + 500)
+    {
+       motorRight.setDirection(0);
+       motorLeft.setDirection(0);
+    }
+
+    if (millis() > _lastTimer + 600)
+    {
+      _lastTimer = 0;
+      if(criticalDistanceRight > 0)
+      {
+        motorRight.setDirection(1);
+        motorLeft.setDirection(0);
+      }
+      else if(criticalDistanceLeft > 0)
+      {
+        motorRight.setDirection(0);
+        motorLeft.setDirection(1);
+      }
+      else 
+      {
+        motorRight.setSpeed(speedRight/2);
+        motorLeft.setSpeed(speedLeft/2);
+        motorRight.setDirection(1);
+        motorLeft.setDirection(0);
+      }
+      motorRight.setSpeed(speedRight);
+      motorLeft.setSpeed(speedLeft);
     }
   } else if (currentState == 2) // turn slightly right
   {
-    signalRight();
-    motorRight.setSpeed(speedRight - 5);
-    motorLeft.setSpeed(speedLeft + 5);
+    motorRight.setSpeed(speedRight - 10);
+    motorLeft.setSpeed(speedLeft + 10);
   } else if (currentState == 3) // turn slightly left
   {
-          signalLeft();
-    motorRight.setSpeed(speedRight + 5);
-    motorLeft.setSpeed(speedLeft - 5);
+    motorRight.setSpeed(speedRight + 10);
+    motorLeft.setSpeed(speedLeft -10);
   }
 
 }
 
 int setNextState()
-{
-  int lowestRight = lowest(0);
-  int lowestMiddle = lowest(1);
-  int lowestLeft = lowest(2);
-
-  if (lowestMiddle < 40)
+{ 
+  currentState = 0;
+      
+  if(Serial.available() > 0)
   {
-    currentState = 1; // stop and turn 
-  } else if (lowestRight < 60 && lowestLeft >= 60)
-  {
-    currentState = 2; // turn slightly right
-  } else if (lowestLeft < 60 && lowestRight >= 60)
-  {
-    currentState = 3; // turn slightly left
-  } else
-  {
-    currentState = 0; // run foreward
-  }
-
-}
-
-int lowest(int arr)
-{
-  int lowest = 300;
-  if (arr == 0) // right
-  {
-    for (int i = 0; i < 50; i++)
-    {
-      int iDistance = measuredDistancesRight[i];
-      if (lowest > iDistance) {
-        //lowest = iDistance; 
-      }
-      lowest = lowest + iDistance;
-    }
-    lowest = lowest / 50;
-  } else if (arr == 1)
-  {
-    for (int i = 0; i < 20; i++)
-    {
-      int iDistance = measuredDistancesMiddle[i];
-      if (lowest > iDistance) {
-        //lowest = iDistance; 
-      }
-      lowest = lowest + iDistance;
-    }
-    lowest = lowest / 20;
-  } else if (arr == 2)
-  {
-    for (int i = 0; i < 50; i++)
-    {
-      int iDistance = measuredDistancesLeft[i];
-      if (lowest > iDistance) {
-        //lowest = iDistance; 
-      }
-      lowest = lowest + iDistance;
-    }
-    lowest = lowest / 50;
-  }
-
-  return lowest;
-}
-
-void runServo()
-{
-  if (servo.getPosition() == -60)
-  {
-    servo.write(60, 2);
-  } else if (servo.getPosition() == 60)
-  {
-    servo.write(-60, 2);
+     msg = Serial.read();
+     Serial.flush();
+     criticalDistanceLeft = msg & B00000100;
+     criticalDistanceMiddle = msg & B00000010;
+     criticalDistanceRight = msg & B00000001;
   }
   
-  int pos = servo.getPosition() + 60;
-  if (pos < 50) // right
+  if(criticalDistanceMiddle > 0)
   {
-    measuredDistancesRight[pos] = ultrasonic.getDistanceInCM();
-  } else if (pos >= 50 && pos < 70)
-  {
-    measuredDistancesMiddle[pos - 50] = ultrasonic.getDistanceInCM();
-  } else if (pos >= 70 && pos < 120) // left
-  {
-    measuredDistancesLeft[pos - 70] = ultrasonic.getDistanceInCM();
+    Serial.println("MIDDLE critical");
+    currentState = 1; // stop and move backwards, then turn 
   }
-}
-
-void signalMiddle()
-{
-  digitalWrite(2, HIGH);
-  digitalWrite(13, HIGH);
-}
-
-void signalLeft()
-{
-  digitalWrite(2, HIGH);
-  digitalWrite(13, LOW);
-}
-
-void signalRight()
-{
-  digitalWrite(2, LOW);
-  digitalWrite(13, HIGH);
+  else
+  {   
+    if(criticalDistanceRight > 0)
+    {
+      Serial.println("RIGHT critical");
+      currentState = 3; // turn slightly left
+    }
+    if(criticalDistanceLeft > 0)
+    {
+      Serial.println("LEFT critical");
+      currentState = 2; // turn slightly right
+    }
+  }
 }
 
 void turnRightAtCurrentPlace()
