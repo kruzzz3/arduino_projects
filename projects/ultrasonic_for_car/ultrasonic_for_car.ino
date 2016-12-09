@@ -16,8 +16,14 @@ int criticalDistanceRight = 30;
 int criticaldistanceMiddle = 25;
 int criticaldistanceLeft = 30;
 
+int tx = 1;
+int rx = 1;
+
+char str[4];
+
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(9600, SERIAL_8N2);
+  //Serial1.begin(9600);
   ultrasonicLeft.init();
   ultrasonicMiddle.init();
   ultrasonicRight.init();
@@ -26,13 +32,18 @@ void setup() {
   pinMode(ledMiddle, OUTPUT);
   pinMode(ledLeft, OUTPUT);
 
+  pinMode(rx, OUTPUT);
+  pinMode(tx, INPUT);
+
   digitalWrite(ledRight, LOW);
   digitalWrite(ledMiddle, LOW);
   digitalWrite(ledLeft, LOW);
+
 }
 
 void loop()
 { 
+  /*
   digitalWrite(ledRight, LOW);
   digitalWrite(ledMiddle, LOW);
   digitalWrite(ledLeft, LOW);
@@ -56,9 +67,16 @@ void loop()
   //Serial.println(distanceMiddle);
   //Serial.print("MIDDLE:");
   //Serial.println(distanceLeft);
-  
+    */
   
   //delay(500);
+
+
+  int value = 1234;
+  itoa(value, str, 10);
+
+  Serial.write(str, 4);
+  delay(1000);
 }
 
 
