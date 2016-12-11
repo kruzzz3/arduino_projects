@@ -1,6 +1,16 @@
+
+
+// source of lib:
+// https://github.com/guillaume-rico/SharpIR
+// model description found on git page
+
+
+
 #include <SharpIR.h>
 
 #define ir A0
+// assuming this is the right model:
+// accurate from 10 to 80 cm 
 #define model 1080
 
 SharpIR SharpIR(ir, model);
